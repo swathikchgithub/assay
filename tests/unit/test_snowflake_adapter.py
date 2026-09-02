@@ -31,10 +31,14 @@ class FakeCursor:
     def __init__(self, rows):
         self._rows = rows
         self.executed: list[tuple[str, list]] = []
+        self.executed_many: list[tuple[str, list]] = []
         self.closed = False
 
     def execute(self, sql, params=None):
         self.executed.append((sql, params))
+
+    def executemany(self, sql, rows):
+        self.executed_many.append((sql, list(rows)))
 
     def fetchall(self):
         return self._rows

@@ -17,7 +17,7 @@ later in the spec is wrong, and three weeks of work said so.
 
 ```bash
 uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e ".[dev]"
-.venv/bin/python demo/seed.py demo/demo.duckdb
+.venv/bin/python -m demo.seed demo/demo.duckdb
 .venv/bin/python -m assay.run.cli \
   --contracts demo/contracts.yml \
   --database demo/demo.duckdb \
@@ -28,7 +28,7 @@ Then restate a closed month and run again — this is the finding no existing
 tool reports:
 
 ```bash
-.venv/bin/python demo/seed.py demo/demo.duckdb --backfill
+.venv/bin/python -m demo.seed demo/demo.duckdb --backfill
 .venv/bin/python -m assay.run.cli --contracts demo/contracts.yml \
   --database demo/demo.duckdb --as-of 2026-09-02T09:00:00+00:00
 ```
@@ -89,6 +89,32 @@ a *wrong answer* rather than an error:
 Adding a third warehouse is a new `Dialect` + adapter and one branch in
 `engine/targets.py` — no invariant changes.
 
+### Proving the adapter against a real warehouse
+
+The fake-connector tests cover everything except whether real Snowflake
+behaves as assumed. To settle that, load the same demo dataset into Snowflake
+and run the identical contracts against it — same seven defects, same expected
+findings, so any divergence is the adapter's fault and nowhere else.
+
+```sql
+CREATE DATABASE IF NOT EXISTS ASSAY_DEMO;
+```
+
+```bash
+.venv/bin/python -m demo.load_snowflake --database ASSAY_DEMO --schema DEMO
+```
+
+That prints a plan and writes nothing. Add `--yes` to execute. Then point the
+run at Snowflake with `SNOWFLAKE_DATABASE=ASSAY_DEMO SNOWFLAKE_SCHEMA=DEMO` —
+the contracts use bare table names, so they resolve against the connection's
+database and schema and need no change.
+
+`demo/load_snowflake.py` is the only code in the repo that writes. It talks to
+the connector directly rather than through `SnowflakeAdapter`, which refuses
+non-queries, and it lives in `demo/` well away from anything the nightly run
+imports. It drops and recreates seven tables in a schema you name, which is
+why it plans first and needs `--yes`.
+
 ## Design
 
 ```
@@ -133,13 +159,25 @@ deterministic. Tests assert exact lag hours rather than approximating.
   verification tool that surprises a channel on first run gets muted before it
   says anything useful.
 
+## Layout
+
+```
+assay/contracts/   models, restricted expression evaluator, YAML + dbt sources
+assay/engine/      warehouse seam, DuckDB + Snowflake adapters, SQL builders
+assay/invariants/  the check classes and the registry that generates them
+assay/run/         orchestration, sqlite history, reporting, CLI
+demo/data.py       the dataset and its seven defects, sink-independent
+demo/seed.py       writes it to DuckDB
+demo/load_snowflake.py  writes it to Snowflake (the only writing code)
+```
+
 ## Tests
 
 ```bash
 .venv/bin/python -m pytest tests -q
 ```
 
-114 tests. The unit suite runs against a fake adapter with canned rows, so each
+134 tests. The unit suite runs against a fake adapter with canned rows, so each
 invariant is exercised in isolation and in milliseconds. The integration suite
 seeds a real DuckDB warehouse with the seven planted defects and asserts each
 one is found and named, then restates a closed month and asserts the second

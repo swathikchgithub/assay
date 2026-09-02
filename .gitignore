@@ -4,3 +4,4 @@ __pycache__/
 .assay/
 demo/demo.duckdb
 .pytest_cache/
+.env
