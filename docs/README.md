@@ -1,10 +1,11 @@
 # Assay documentation
 
-Ten documents. Read in this order if you are new; jump straight to the one
-you need if you are not.
+Eleven documents. Read 1-9 in order if you are new. Document 0 is the origin spec covering
+the whole P0-P3 arc; the rest describe what is built today.
 
 | # | Document | Answers |
 |---|---|---|
+| 0 | [Architecture spec](00-architecture-spec.md) | The origin design, P0 through P3 — plan algebra, full taxonomy, recall |
 | 1 | [Product requirements](01-prd.md) | What problem, for whom, and how we know it worked |
 | 2 | [How it works](02-how-it-works.md) | The mechanism, end to end, without reading code |
 | 3 | [Technical design](03-tdd.md) | Architecture, components, contracts, data model, diagrams |
