@@ -26,6 +26,7 @@ Full docs in [`docs/`](docs/):
 | [Product requirements](docs/01-prd.md) | [How it works](docs/02-how-it-works.md) | [Technical design](docs/03-tdd.md) |
 | [Design decisions & alternatives](docs/04-design-decisions.md) | [Invariant reference](docs/05-invariants.md) | [Code walkthrough](docs/06-code-walkthrough.md) |
 | [Usage](docs/07-usage.md) | [Operations](docs/08-operations.md) | [Roadmap](docs/09-roadmap.md) |
+| [Deployment & showcase](docs/10-deployment.md) | | |
 
 If you read one, read [design decisions](docs/04-design-decisions.md) — it
 covers why this is not a dbt test, not an anomaly detector, and not a golden

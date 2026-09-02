@@ -1,6 +1,6 @@
 # Assay documentation
 
-Nine documents. Read in this order if you are new; jump straight to the one
+Ten documents. Read in this order if you are new; jump straight to the one
 you need if you are not.
 
 | # | Document | Answers |
@@ -14,6 +14,7 @@ you need if you are not.
 | 7 | [Usage](07-usage.md) | Installing, writing contracts, running, CI |
 | 8 | [Operations](08-operations.md) | Permissions, cost, scheduling, troubleshooting |
 | 9 | [Roadmap](09-roadmap.md) | What is deliberately absent, and what comes next |
+| 10 | [Deployment and showcase](10-deployment.md) | How to demo it publicly, and what each platform is for |
 
 ## The one-paragraph version
 
