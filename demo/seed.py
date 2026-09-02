@@ -25,10 +25,37 @@ def seed(path: Path, backfill: bool = False, days: int = 540) -> None:
             conn.execute(drop)
             conn.execute(create)
         for table in ("regions", "accounts", "orders", "order_items", "discounts", "tickets"):
-            conn.executemany(data.insert(table), dataset.rows(table))
+            _bulk_insert(conn, table, dataset.rows(table))
         _events(conn, days)
     finally:
         conn.close()
+
+
+def _bulk_insert(conn: duckdb.DuckDBPyConnection, table: str, rows: list, chunk: int = 500) -> None:
+    """Multi-row INSERT in chunks rather than executemany.
+
+    DuckDB's executemany runs one prepared-statement round trip per row. At
+    ~62,000 rows that is unnoticeable on a laptop and takes minutes on a
+    throttled shared vCPU, which is where the hosted demo runs.
+
+    Time: O(rows). Round trips: O(rows / chunk) instead of O(rows).
+    """
+    if not rows:
+        return
+    columns = data.COLUMNS[table]
+    placeholder = "(" + ", ".join("?" * len(columns)) + ")"
+    prefix = f"INSERT INTO {table} ({', '.join(columns)}) VALUES "
+    for start in range(0, len(rows), chunk):
+        batch = rows[start : start + chunk]
+        conn.execute(
+            prefix + ", ".join([placeholder] * len(batch)),
+            [value for row in batch for value in row],
+        )
+
+
+def _backfill(conn: duckdb.DuckDBPyConnection) -> None:
+    next_id = conn.execute("SELECT max(id) + 1 FROM orders").fetchone()[0]
+    _bulk_insert(conn, "orders", data.backfill_orders(next_id))
 
 
 def _events(conn: duckdb.DuckDBPyConnection, days: int) -> None:
@@ -49,11 +76,6 @@ def _events(conn: duckdb.DuckDBPyConnection, days: int) -> None:
         FROM generate_series(0, {days * data.EVENTS_PER_DAY - 1}) AS t(i)
         """
     )
-
-
-def _backfill(conn: duckdb.DuckDBPyConnection) -> None:
-    next_id = conn.execute("SELECT max(id) + 1 FROM orders").fetchone()[0]
-    conn.executemany(data.insert("orders"), data.backfill_orders(next_id))
 
 
 if __name__ == "__main__":

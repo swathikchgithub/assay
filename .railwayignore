@@ -1,0 +1,12 @@
+.venv/
+.git/
+.assay/
+.pytest_cache/
+__pycache__/
+*.pyc
+site/
+docs/
+tests/
+demo/demo.duckdb
+.env
+.env.local
