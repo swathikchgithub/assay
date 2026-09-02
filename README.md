@@ -54,6 +54,41 @@ SQL; the metric is *labelled* wrong, and every consumer who sums a daily
 series is quietly told to triple-count. No schema test, freshness monitor, or
 dbt test catches it.
 
+## Warehouses
+
+DuckDB and Snowflake. `--target snowflake` reads its connection from the
+environment and nothing else:
+
+```bash
+export SNOWFLAKE_ACCOUNT=acme-eu SNOWFLAKE_USER=assay_reader \
+       SNOWFLAKE_WAREHOUSE=ANALYTICS_WH SNOWFLAKE_DATABASE=PROD \
+       SNOWFLAKE_SCHEMA=MART SNOWFLAKE_ROLE=ASSAY_RO
+.venv/bin/python -m assay.run.cli --contracts contracts.yml --target snowflake
+```
+
+Auth is SSO (`externalbrowser`) by default, or key-pair via
+`SNOWFLAKE_PRIVATE_KEY_FILE`. **`SNOWFLAKE_PASSWORD` is refused** — Assay does
+not handle passwords, and a credential passed as a CLI argument lands in shell
+history and in `ps` output for every other user on the host.
+
+Three Snowflake differences are handled explicitly, because each one produces
+a *wrong answer* rather than an error:
+
+- **Identifier case.** Snowflake folds unquoted identifiers to upper case, so a
+  table created as `orders` is stored as `ORDERS` and `"orders"` resolves to a
+  different, usually non-existent object. Contract identifiers are folded to
+  upper before quoting. A project that deliberately created quoted lower-case
+  objects needs `--case-policy exact`; no single rule satisfies both, so it is
+  a setting rather than a guess.
+- **Bind style.** The connector defaults to `pyformat`; Assay generates `?`
+  placeholders, so the adapter switches it to `qmark` at connect time.
+- **No read-only connection.** DuckDB has a read-only flag and Snowflake does
+  not, so the guarantee is enforced twice: connect with a SELECT-only role, and
+  every statement is checked before it is sent.
+
+Adding a third warehouse is a new `Dialect` + adapter and one branch in
+`engine/targets.py` — no invariant changes.
+
 ## Design
 
 ```
@@ -104,8 +139,14 @@ deterministic. Tests assert exact lag hours rather than approximating.
 .venv/bin/python -m pytest tests -q
 ```
 
-92 tests. The unit suite runs against a fake adapter with canned rows, so each
+114 tests. The unit suite runs against a fake adapter with canned rows, so each
 invariant is exercised in isolation and in milliseconds. The integration suite
 seeds a real DuckDB warehouse with the seven planted defects and asserts each
 one is found and named, then restates a closed month and asserts the second
 run notices — including that metrics the backfill did not touch stay quiet.
+
+The Snowflake adapter is tested against a fake connector rather than a live
+account, so identifier folding, bind style, the read-only guard, and credential
+handling are all covered offline. What that cannot cover is whether a real
+project's objects resolve under the default case policy — that is the first
+thing to check when pointing it at a live warehouse.

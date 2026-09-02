@@ -15,8 +15,8 @@ from typing import Optional, Sequence
 
 from assay.contracts.models import ContractSet
 from assay.contracts.sources import DbtManifestSource, YamlSource
-from assay.engine.duckdb_adapter import DuckDBAdapter
 from assay.engine.sql import Window
+from assay.engine.targets import TARGETS, open_adapter
 from assay.run.history import History
 from assay.run.report import SlackNotifier, markdown, slack_blocks
 from assay.run.runner import run
@@ -33,7 +33,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return EXIT_CONFIG
 
     as_of = _as_of(args.as_of)
-    adapter = DuckDBAdapter(args.database, as_of=as_of, read_only=True)
+    try:
+        adapter = open_adapter(args.target, as_of, args.database, args.case_policy)
+    except (ImportError, OSError, ValueError) as exc:
+        print(f"cannot open {args.target}: {exc}", file=sys.stderr)
+        return EXIT_CONFIG
     history = History(args.history)
     try:
         summary = run(
@@ -86,7 +90,19 @@ def _parser() -> argparse.ArgumentParser:
     source = p.add_mutually_exclusive_group(required=True)
     source.add_argument("--contracts", help="path to a contracts YAML file")
     source.add_argument("--dbt-manifest", help="path to dbt semantic_manifest.json")
-    p.add_argument("--database", required=True, help="DuckDB file to check")
+    p.add_argument(
+        "--target",
+        choices=TARGETS,
+        default="duckdb",
+        help="warehouse to check (snowflake reads SNOWFLAKE_* from the environment)",
+    )
+    p.add_argument("--database", help="DuckDB file to check (duckdb target only)")
+    p.add_argument(
+        "--case-policy",
+        choices=("upper", "exact"),
+        default="upper",
+        help="snowflake identifier folding; 'exact' for quoted lower-case objects",
+    )
     p.add_argument("--history", default=".assay/history.db", help="observation history")
     p.add_argument("--since-days", type=int, default=540, help="lookback window")
     p.add_argument("--as-of", help="ISO timestamp to treat as now (testing)")
