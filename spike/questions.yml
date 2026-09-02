@@ -1,0 +1,42 @@
+# Ground truth for the planner spike.
+#
+# The demo contract set is deliberately lopsided: only `net_revenue` declares
+# dimensions. That makes it a good test of STR-02 — a model that pattern-matches
+# "X by Y" without consulting the contract will confidently slice metrics that
+# cannot be sliced, and those cases are the ones worth measuring.
+
+answerable:
+  - {q: "net revenue by region",                          metric: net_revenue,       by: [region]}
+  - {q: "show me net revenue broken down by segment",     metric: net_revenue,       by: [segment]}
+  - {q: "net revenue by sku",                             metric: net_revenue,       by: [sku]}
+  - {q: "net revenue by region and segment",              metric: net_revenue,       by: [region, segment]}
+  - {q: "what was gross revenue",                         metric: gross_revenue,     by: []}
+  - {q: "total gross revenue last quarter",               metric: gross_revenue,     by: []}
+  - {q: "gross revenue",                                  metric: gross_revenue,     by: []}
+  - {q: "how many active users",                          metric: active_users,      by: []}
+  - {q: "active user count",                              metric: active_users,      by: []}
+  - {q: "monthly active users",                           metric: active_users,      by: []}
+  - {q: "open tickets",                                   metric: open_tickets,      by: []}
+  - {q: "how many support tickets are open",              metric: open_tickets,      by: []}
+  - {q: "tickets",                                        metric: open_tickets,      by: []}
+  - {q: "total discounts given",                          metric: discount_total,    by: []}
+  - {q: "discounts",                                      metric: discount_total,    by: []}
+  - {q: "completed revenue",                              metric: completed_revenue, by: []}
+  - {q: "how much revenue did we complete",               metric: completed_revenue, by: []}
+  - {q: "what's our net revenue",                         metric: net_revenue,       by: []}
+  - {q: "net revenue last month",                         metric: net_revenue,       by: []}
+  - {q: "revenue by region",                              metric: net_revenue,       by: [region]}
+  - {q: "break net revenue down by sku",                  metric: net_revenue,       by: [sku]}
+  - {q: "net revenue for the enterprise segment",         metric: net_revenue,       by: []}
+
+# Every one of these must be declined. Inventing an answer is the failure the
+# whole project exists to prevent, so a wrong plan here costs more than a miss.
+refuse:
+  - {q: "what is our churn rate",             why: "no churn metric exists"}
+  - {q: "customer lifetime value",            why: "no CLV metric exists"}
+  - {q: "conversion rate by channel",         why: "no conversion metric exists"}
+  - {q: "net revenue by country",             why: "country is not a dimension of net_revenue"}
+  - {q: "active users by region",             why: "active_users declares no dimensions"}
+  - {q: "gross revenue by segment",           why: "gross_revenue declares no dimensions"}
+  - {q: "open tickets by priority",           why: "open_tickets declares no dimensions"}
+  - {q: "what's the weather in london",       why: "not a question about the warehouse"}
