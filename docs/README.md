@@ -1,6 +1,6 @@
 # Assay documentation
 
-Eleven documents. Read 1-9 in order if you are new. Document 0 is the origin spec covering
+Twelve documents. Read 1-9 in order if you are new. Document 0 is the origin spec covering
 the whole P0-P3 arc; the rest describe what is built today.
 
 | # | Document | Answers |
@@ -16,6 +16,7 @@ the whole P0-P3 arc; the rest describe what is built today.
 | 8 | [Operations](08-operations.md) | Permissions, cost, scheduling, troubleshooting |
 | 9 | [Roadmap](09-roadmap.md) | What is deliberately absent, and what comes next |
 | 10 | [Deployment and showcase](10-deployment.md) | How to demo it publicly, and what each platform is for |
+| 11 | [NLQ planner build plan](11-nlq-planner.md) | **Proposed.** Question -> typed plan -> gate -> proof card |
 
 ## The one-paragraph version
 
