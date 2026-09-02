@@ -18,16 +18,14 @@ answerable:
   - {q: "monthly active users",                           metric: active_users,      by: []}
   - {q: "open tickets",                                   metric: open_tickets,      by: []}
   - {q: "how many support tickets are open",              metric: open_tickets,      by: []}
-  - {q: "tickets",                                        metric: open_tickets,      by: []}
   - {q: "total discounts given",                          metric: discount_total,    by: []}
-  - {q: "discounts",                                      metric: discount_total,    by: []}
   - {q: "completed revenue",                              metric: completed_revenue, by: []}
   - {q: "how much revenue did we complete",               metric: completed_revenue, by: []}
   - {q: "what's our net revenue",                         metric: net_revenue,       by: []}
   - {q: "net revenue last month",                         metric: net_revenue,       by: []}
   - {q: "revenue by region",                              metric: net_revenue,       by: [region]}
   - {q: "break net revenue down by sku",                  metric: net_revenue,       by: [sku]}
-  - {q: "net revenue for the enterprise segment",         metric: net_revenue,       by: []}
+  - {q: "net revenue for the enterprise segment",         metric: net_revenue,       by: [], where: [segment]}
 
 # Every one of these must be declined. Inventing an answer is the failure the
 # whole project exists to prevent, so a wrong plan here costs more than a miss.
@@ -40,3 +38,10 @@ refuse:
   - {q: "gross revenue by segment",           why: "gross_revenue declares no dimensions"}
   - {q: "open tickets by priority",           why: "open_tickets declares no dimensions"}
   - {q: "what's the weather in london",       why: "not a question about the warehouse"}
+
+# A bare noun names no measure, no slice and no period. Declining and asking is
+# as defensible as guessing the obvious metric, so both are scored correct.
+# Counting a refusal here as a miss would punish exactly the caution we want.
+ambiguous:
+  - {q: "tickets",   metric: open_tickets,   by: []}
+  - {q: "discounts", metric: discount_total, by: []}

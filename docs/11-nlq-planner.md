@@ -1,6 +1,7 @@
 # 11 · NLQ planner — build plan
 
-**Status: proposed, not built.** This document is for review. No code exists.
+**Status: step 0 complete, steps 1-4 not built.** The model is chosen on
+evidence (below). Nothing else exists yet.
 
 ## What is being built
 
@@ -124,21 +125,63 @@ POST https://router.huggingface.co/v1/chat/completions
 Authorization: Bearer $HF_TOKEN
 ```
 
-| Candidate | Why | Risk |
-|---|---|---|
-| `Qwen/Qwen2.5-72B-Instruct` | Strong structured output, widely available on the router | Cold starts |
-| `meta-llama/Llama-3.3-70B-Instruct` | Reliable instruction following | Larger, slower |
-| `mistralai/Mistral-Small-24B-Instruct` | Fast, cheap, likely sufficient — the task is small | Weaker on odd phrasings |
+| Candidate | valid | answers | refusals | p50 | p95 |
+|---|---|---|---|---|---|
+| **`Qwen/Qwen2.5-72B-Instruct`** | **100%** | **95%** | **100%** | **1.69s** | **2.60s** |
+| `Qwen/Qwen3-30B-A3B` | 93% | 86% | 75% | 0.69s | 1.93s |
+| `Qwen/Qwen3-8B` | 67% | 41% | 88% | 2.20s | 2.55s |
+| `meta-llama/Llama-3.3-70B-Instruct` | 87% | 68% | 100% | 1.04s | 3.69s |
+| `mistralai/Mistral-Small-24B` | — | — | — | — | not served by the router |
 
-**Step 0 of the build is a spike**, not a guess: run ~30 representative
-questions (including ones that must be refused) against two or three
-candidates and measure valid-plan rate and latency. Pick on evidence. The task
-is narrow — pick a metric, a dimension, a period — so the smallest model that
-passes is the right one.
+32 questions: 22 answerable, 2 ambiguous, 8 that must be declined. Run against
+the demo contract set, which is deliberately lopsided — only `net_revenue`
+declares dimensions — so a model that pattern-matches "X by Y" without reading
+the catalogue gets caught.
 
-Not applicable: `response_format` support varies by upstream provider. If the
-chosen model does not honour a JSON schema, fall back to JSON-mode plus strict
-validation. The gate makes that safe.
+**Chosen: `Qwen/Qwen2.5-72B-Instruct`.** Every plan legal, every refusal
+correct, and one miss in 32 (it declined "monthly active users", which is
+cautious rather than wrong). p50 1.69s sits inside the latency budget.
+
+### The finding that matters more than the model
+
+`Qwen3-30B-A3B` is **2.4× faster** and refuses only 75% of what it must. Its
+two dangerous errors were exactly the failure the question set was built to
+provoke:
+
+```
+should have refused   active users by region    → picked active_users by [region]
+should have refused   gross revenue by segment  → picked gross_revenue by [segment]
+```
+
+Both metrics declare no dimensions. **The type gate rejected both.** That is
+why its validity is 93% rather than 100%: the two invalid plans are precisely
+the two dangerous ones.
+
+So with the *weaker, faster* model the system would still never have produced
+a wrong number — it would have produced a refusal. The model choice buys
+answer quality; the gate buys correctness, and the gate is deterministic.
+
+That is the "model is the last 20%" claim as a measurement rather than a
+slogan, and it is worth putting on the page.
+
+**Latency loses to refusal accuracy.** 0.69s against 1.69s is a real
+difference, and it is not worth a model that invents a slice for one question
+in four that should have been declined. A public demo of a correctness tool
+cannot ship the fast-and-loose option.
+
+### Harness corrections found by running it
+
+Two of the leader's original three "misses" were the harness's fault, not the
+model's, which is the ordinary result of measuring something for the first
+time:
+
+- The plan schema had **no `where` field**, so "net revenue for the enterprise
+  segment" was inexpressible. The model did the best legal thing — grouped by
+  segment — and was scored wrong for it. Filters added.
+- Bare nouns (`"tickets"`, `"discounts"`) name no measure, slice or period.
+  Declining and asking is as defensible as guessing, so they are now scored as
+  ambiguous and accept either. Counting a refusal there as a miss punishes the
+  exact caution the rest of the system is built around.
 
 ## Latency
 
@@ -257,7 +300,7 @@ stronger anyway:
 
 | | Step | Verifies |
 |---|---|---|
-| 0 | Spike: 30 questions × 2–3 models, measure valid-plan rate and latency | The model choice, on evidence |
+| 0 | ~~Spike: questions × candidate models~~ **done** | Qwen2.5-72B, and that the gate catches model errors |
 | 1 | Plan IR + type gate + unit tests, no model | The gate refuses correctly — testable offline |
 | 2 | HF planner behind the gate | End-to-end on Railway |
 | 3 | Proof card rendering + question box on Vercel | The visible product |

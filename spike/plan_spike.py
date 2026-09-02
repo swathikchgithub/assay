@@ -70,6 +70,19 @@ def plan_schema(contracts: ContractSet) -> dict[str, Any]:
             "refusal_reason": {"type": ["string", "null"]},
             "select": {"type": "array", "items": {"type": "string", "enum": metrics}},
             "by": {"type": "array", "items": {"type": "string", "enum": dimensions}},
+            "where": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": ["dimension", "op", "value"],
+                    "properties": {
+                        "dimension": {"type": "string", "enum": dimensions},
+                        "op": {"type": "string", "enum": ["eq", "neq", "in"]},
+                        "value": {},
+                    },
+                },
+            },
             "time": {
                 "type": "object",
                 "additionalProperties": False,
@@ -94,9 +107,11 @@ CATALOGUE
 {catalogue}
 
 RULES
-1. A metric can only be sliced by a dimension listed under that metric. If the \
-question asks to slice a metric by something not listed for it, the question is \
-not answerable.
+1. A metric can only be sliced by, or filtered on, a dimension listed under that \
+metric. If the question asks to slice or filter a metric by something not listed \
+for it, the question is not answerable.
+1b. "by X" means group: put X in "by". "for X" or "in X" means restrict: put a \
+clause in "where" and leave "by" empty.
 2. If no metric in the catalogue measures what was asked, the question is not \
 answerable.
 3. When not answerable, set "answerable": false and give a one-line \
@@ -169,7 +184,8 @@ def validate(plan: dict[str, Any], contracts: ContractSet) -> tuple[bool, str]:
     for name in selected:
         if not contracts.has(name):
             return False, f"STR-01: no metric named {name!r}"
-    for dim in plan.get("by") or []:
+    filtered = [c.get("dimension") for c in plan.get("where") or [] if isinstance(c, dict)]
+    for dim in (plan.get("by") or []) + filtered:
         for name in selected:
             if not _reachable(contracts.metric(name), dim):
                 return False, f"STR-02: {name} cannot be sliced by {dim!r}"
@@ -181,14 +197,21 @@ def _reachable(metric: Metric, dimension: str) -> bool:
 
 
 def judge(plan: dict[str, Any], expected: dict[str, Any], refusal: bool) -> bool:
-    """Correct means: declined what must be declined, or picked what a human would."""
+    """Correct means: declined what must be declined, or picked what a human would.
+
+    An ambiguous question accepts either, because declining to guess is not a
+    defect - it is the behaviour the rest of the system is built around.
+    """
     if refusal:
         return not plan.get("answerable", True)
     if not plan.get("answerable"):
+        return bool(expected.get("ambiguous"))
+    if set(plan.get("select") or []) != {expected["metric"]}:
         return False
-    return set(plan.get("select") or []) == {expected["metric"]} and set(
-        plan.get("by") or []
-    ) == set(expected["by"])
+    if set(plan.get("by") or []) != set(expected["by"]):
+        return False
+    got = {c.get("dimension") for c in plan.get("where") or [] if isinstance(c, dict)}
+    return got == set(expected.get("where") or [])
 
 
 # ---- running ------------------------------------------------------------------
@@ -215,12 +238,17 @@ def ask(model: str, question: str, system: str, schema: dict, token: str) -> tup
     elapsed = time.time() - started
     if response.status_code != 200:
         raise RuntimeError(f"{response.status_code}: {response.text[:160]}")
-    return response.json()["choices"][0]["message"]["content"], elapsed
+    message = response.json()["choices"][0]["message"]
+    # Reasoning-tuned models return content=None and put the text elsewhere.
+    text = message.get("content") or message.get("reasoning_content") or ""
+    return text, elapsed
 
 
-def parse(raw: str) -> Optional[dict[str, Any]]:
+def parse(raw: Optional[str]) -> Optional[dict[str, Any]]:
     """Models fence JSON or prepend prose often enough to be worth handling."""
-    text = raw.strip()
+    text = (raw or "").strip()
+    if not text:
+        return None
     if text.startswith("```"):
         text = text.split("```")[1].removeprefix("json").strip()
     start, end = text.find("{"), text.rfind("}")
@@ -260,6 +288,7 @@ def run_model(model: str, cases: list[tuple[str, dict, bool]], contracts: Contra
 def load_cases() -> list[tuple[str, dict, bool]]:
     spec = yaml.safe_load(QUESTIONS.read_text())
     cases = [(c["q"], c, False) for c in spec["answerable"]]
+    cases += [(c["q"], {**c, "ambiguous": True}, False) for c in spec.get("ambiguous", [])]
     cases += [(c["q"], c, True) for c in spec["refuse"]]
     return cases
 
