@@ -1,0 +1,72 @@
+version: demo-v1
+
+# Contracts as a team would actually have them: imported from what already
+# exists, warts included. Nothing here is written to make a check fail — the
+# joins and additivity labels are the ones a real project ships.
+
+metrics:
+  - name: net_revenue
+    table: orders
+    measure: sum(amount - discount)
+    time_column: ordered_at
+    additivity: additive
+    tolerance: 0.001
+    unit: money
+    freshness_sla_hours: 48
+    owner: finance
+    joins:
+      - {table: regions,     left_key: region_code, right_key: code,     kind: inner}
+      - {table: accounts,    left_key: account_id,  right_key: id,       kind: left}
+      - {table: order_items, left_key: id,          right_key: order_id, kind: left}
+    dimensions:
+      - {name: region,  column: name,    table: regions}
+      - {name: segment, column: segment, table: accounts}
+      - {name: sku,     column: sku,     table: order_items}
+
+  - name: gross_revenue
+    table: orders
+    measure: sum(amount)
+    time_column: ordered_at
+    additivity: additive
+    unit: money
+    owner: finance
+
+  - name: completed_revenue
+    table: orders
+    measure: sum(amount)
+    time_column: ordered_at
+    additivity: additive
+    where: status <> 'cancelled'
+    unit: money
+    owner: finance
+
+  - name: discount_total
+    table: discounts
+    measure: sum(amount)
+    time_column: applied_at
+    additivity: additive
+    unit: money
+    owner: revops
+
+  - name: active_users
+    table: events
+    measure: count(distinct user_id)
+    time_column: occurred_at
+    additivity: additive        # <- as the project declares it
+    unit: count
+    owner: product
+
+  - name: open_tickets
+    table: tickets
+    measure: count(*)
+    time_column: opened_at
+    additivity: additive
+    unit: count
+    freshness_sla_hours: 24
+    owner: support
+
+identities:
+  - name: net_is_gross_less_discounts
+    lhs: net_revenue
+    rhs: gross_revenue - discount_total
+    tolerance: 0.002
