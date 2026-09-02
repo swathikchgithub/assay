@@ -54,6 +54,43 @@ SQL; the metric is *labelled* wrong, and every consumer who sums a daily
 series is quietly told to triple-count. No schema test, freshness monitor, or
 dbt test catches it.
 
+## Diagnosing a setup
+
+```bash
+.venv/bin/python -m assay.run.doctor_cli --contracts contracts.yml --target snowflake
+```
+
+```
+Assay doctor · target=snowflake · 2026-09-02 19:38 UTC
+
+  ✓  configuration      account ACME-PROD as assay_reader · key-pair auth
+  ✓  endpoint           acme-prod.snowflakecomputing.com certificate valid
+  ✓  connection         snowflake reachable
+  ✓  session            ASSAY_RO @ COMPUTE_WH · ASSAY_DEMO.DEMO
+  ✓  role               ASSAY_RO is not a privileged built-in role
+  ✓  case policy        objects are UPPER CASE; --case-policy upper is correct
+  ✓  contract objects   6 metrics resolved against 7 tables, 22 columns
+  ✓  row counts         329,457 rows across 7 tables
+```
+
+Exit `0` clean, `1` warnings only, `2` something blocking.
+
+Every check here exists because bringing this up against a real account failed
+in a way whose error named the symptom and not the cause:
+
+- **A wrong account identifier** surfaced as a TLS hostname mismatch forty
+  stack frames deep. Snowflake wildcards its DNS, so a bad identifier resolves
+  happily and lands you on someone else's deployment — only the certificate
+  reveals it. `check_endpoint` verifies the certificate before authenticating,
+  and names `SYSTEM$ALLOWLIST()` as the way to get the right value.
+- **A missing SAML provider** surfaced as `390190`. Configuration is checked
+  first, so a missing variable never reaches the point of opening a browser.
+- **Empty tables** would surface as a report where every check skipped, which
+  reads like success. `check_row_counts` says so instead.
+- **A wrong case policy** would surface as every object appearing not to exist.
+  Object resolution is case-insensitive and the policy is reported separately,
+  so the two failures do not look alike.
+
 ## Warehouses
 
 DuckDB and Snowflake. `--target snowflake` reads its connection from the
@@ -198,7 +235,7 @@ demo/load_snowflake.py  writes it to Snowflake (the only writing code)
 .venv/bin/python -m pytest tests -q
 ```
 
-134 tests. The unit suite runs against a fake adapter with canned rows, so each
+159 tests. The unit suite runs against a fake adapter with canned rows, so each
 invariant is exercised in isolation and in milliseconds. The integration suite
 seeds a real DuckDB warehouse with the seven planted defects and asserts each
 one is found and named, then restates a closed month and asserts the second
