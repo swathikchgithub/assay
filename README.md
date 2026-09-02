@@ -1,8 +1,12 @@
 # Assay — P0
 
-The invariant engine from the [Assay design spec](https://claude.ai/code/artifact/aa873390-ac8d-442c-bc47-7be08c416ca1),
-phase P0. It runs against metric definitions a team already has and reports
-what is wrong with numbers they already ship to executives.
+Assay runs against the metric definitions a team already has and reports what
+is wrong with the numbers they already ship to executives.
+
+A governed metric guarantees *consistency*, not *correctness* — every dashboard
+showing the same wrong number consistently is exactly what governance buys you.
+Assay checks the numbers themselves, continuously, and generates the checks
+from the definitions rather than asking anyone to write them.
 
 **No language model. No query interface. No dashboard.** Those are P3. This
 phase exists to answer one question, cheaply and falsifiably:
@@ -13,7 +17,39 @@ phase exists to answer one question, cheaply and falsifiably:
 If a team is indifferent to what this reports, the premise of everything
 later in the spec is wrong, and three weeks of work said so.
 
+## What it looks like
+
+```
+2026-09-01 09:00 UTC · 5 failed, 2 warned, 24 passed, 6 skipped · 24 scans · 0.05s
+
+## Failed (5)
+
+- ✖ CON-01  net_revenue by region  — grouping by region accounts for 17,966,839.32
+           of 20,063,846.55 — 2,097,007.23 (10.45%) disappears in the traversal
+           to regions
+- ✖ CON-04  net_revenue -> order_items — fan-out: joining order_items turns 16,110
+           rows into 40,341 (2.50x) — every additive measure over this path is
+           overstated
+- ✖ IDN-03  active_users — 2026-01: daily values rolled up give 14,193.00, computed
+           natively at month gives 900.00 (1477.00% apart) — `active_users` is
+           declared additive but does not roll up that way
+
+## Warnings (2)
+
+- ⚠ CON-02  net_revenue by segment — 5.19% of net_revenue has no segment
+- ⚠ TMP-01  open_tickets — newest row is 40.0h old against a 24h SLA
+```
+
+Every one of those is a defect an analytics team actually ships, and none of
+them looks wrong in a dashboard. `IDN-03` is the one worth dwelling on: nothing
+is wrong with the data or the SQL — the metric is *labelled* wrong, so every
+consumer who sums a daily series is quietly told to triple-count. No schema
+test, freshness monitor, or dbt test catches it.
+
 ## Run the demo
+
+No warehouse, no credentials, no account — it runs against a local DuckDB file
+in about a minute.
 
 ```bash
 uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e ".[dev]"
@@ -246,3 +282,7 @@ account, so identifier folding, bind style, the read-only guard, and credential
 handling are all covered offline. What that cannot cover is whether a real
 project's objects resolve under the default case policy — that is the first
 thing to check when pointing it at a live warehouse.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).
