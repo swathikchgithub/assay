@@ -8,14 +8,39 @@ values are never interpolated (A03: injection).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 from assay.contracts.models import Dimension, Grain, Join, Metric
 from assay.engine.adapter import Dialect, Query
 
 BASE = "b"
+
+
+@dataclass(frozen=True)
+class Predicate:
+    """A restriction on a dimension, bound as a parameter.
+
+    Expressed against a `Dimension` rather than a column name so the builder
+    resolves the traversal itself — a plan never names a table, and neither
+    does a predicate over one.
+    """
+
+    dimension: Dimension
+    op: str
+    value: Any
+
+    @property
+    def values(self) -> tuple[Any, ...]:
+        if isinstance(self.value, (list, tuple)):
+            return tuple(self.value)
+        return (self.value,)
+
+
+_SQL_OP = {
+    "eq": "=", "neq": "<>", "gt": ">", "gte": ">=", "lt": "<", "lte": "<=",
+}
 
 
 @dataclass(frozen=True)
@@ -40,22 +65,30 @@ class MetricSQL:
 
     # ---- public builders -------------------------------------------------
 
-    def total(self, window: Window) -> Query:
+    def total(
+        self, window: Window, predicates: Sequence[Predicate] = ()
+    ) -> Query:
         """Ungrouped metric value, using only joins the measure depends on."""
-        where, params = self._where(window)
+        joins = self._required_joins() + self._joins_for_predicates(predicates)
+        where, params = self._where(window, predicates=predicates)
         return Query(
-            f"SELECT {self._m.measure} FROM {self._from(self._required_joins())}{where}",
-            params,
+            f"SELECT {self._m.measure} FROM {self._from(joins)}{where}", params
         )
 
-    def grouped(self, dim: Dimension, window: Window) -> Query:
+    def grouped(
+        self, dim: Dimension, window: Window, predicates: Sequence[Predicate] = ()
+    ) -> Query:
         """Metric grouped by one dimension, NULL group preserved (CON-01, CON-02)."""
-        where, params = self._where(window)
-        joins = self._required_joins() + self._joins_for(dim)
+        joins = (
+            self._required_joins()
+            + self._joins_for(dim)
+            + self._joins_for_predicates(predicates, exclude=dim)
+        )
+        where, params = self._where(window, predicates=predicates)
         expr = self._dimension_expr(dim)
         return Query(
             f"SELECT {expr} AS dim_value, {self._m.measure} AS value "
-            f"FROM {self._from(joins)}{where} GROUP BY 1",
+            f"FROM {self._from(joins)}{where} GROUP BY 1 ORDER BY 2 DESC",
             params,
         )
 
@@ -112,7 +145,10 @@ class MetricSQL:
         return clause
 
     def _where(
-        self, window: Window, include_metric_filter: bool = True
+        self,
+        window: Window,
+        include_metric_filter: bool = True,
+        predicates: Sequence[Predicate] = (),
     ) -> tuple[str, tuple[Any, ...]]:
         clauses: list[str] = []
         params: list[Any] = []
@@ -125,7 +161,37 @@ class MetricSQL:
             params.append(window.end)
         if include_metric_filter and self._m.where:
             clauses.append(f"({self._m.where})")
+        for predicate in predicates:
+            fragment, bound = self._predicate(predicate)
+            clauses.append(fragment)
+            params.extend(bound)
         return (" WHERE " + " AND ".join(clauses) if clauses else "", tuple(params))
+
+    def _predicate(self, predicate: Predicate) -> tuple[str, tuple[Any, ...]]:
+        """Values are always bound, never interpolated."""
+        expr = self._dimension_expr(predicate.dimension)
+        if predicate.op == "in":
+            values = predicate.values
+            holes = ", ".join("?" * len(values))
+            return f"{expr} IN ({holes})", values
+        operator = _SQL_OP.get(predicate.op)
+        if operator is None:
+            raise ValueError(f"unsupported predicate operator: {predicate.op!r}")
+        return f"{expr} {operator} ?", (predicate.value,)
+
+    def _joins_for_predicates(
+        self, predicates: Sequence[Predicate], exclude: Optional[Dimension] = None
+    ) -> list[Join]:
+        """Traversals a filtered dimension needs, without duplicating one already added."""
+        taken = {exclude.table} if exclude is not None else set()
+        out: list[Join] = []
+        for predicate in predicates:
+            table = predicate.dimension.table
+            if table is None or table in taken:
+                continue
+            taken.add(table)
+            out.extend(j for j in self._m.joins if j.table == table and not j.required)
+        return out
 
     def _column(self, name: str) -> str:
         return f"{BASE}.{self._d.quote(name)}"

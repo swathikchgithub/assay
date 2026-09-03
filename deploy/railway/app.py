@@ -48,10 +48,23 @@ _error: dict[str, str] = {}
 _ask: dict[str, AskService] = {}
 
 
+def _execute_plan(plan):
+    """Open the demo warehouse, run the plan, check it, close."""
+    from assay.nlq.answer import execute
+
+    contracts = YamlSource(CONTRACTS).load()
+    with DuckDBAdapter(str(WAREHOUSE), as_of=_clock()) as adapter:
+        return execute(plan, contracts, adapter)
+
+
 def _ask_service() -> AskService:
     """Built once, lazily — the planner renders a catalogue from the contracts."""
     if "svc" not in _ask:
-        _ask["svc"] = AskService(YamlSource(CONTRACTS).load(), token=token_from_env())
+        _ask["svc"] = AskService(
+            YamlSource(CONTRACTS).load(),
+            token=token_from_env(),
+            executor=_execute_plan,
+        )
     return _ask["svc"]
 
 

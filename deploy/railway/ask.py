@@ -17,11 +17,13 @@ import threading
 import time
 from collections import OrderedDict, deque
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from assay.contracts.models import ContractSet
+from assay.invariants.base import CheckResult
+from assay.nlq.answer import Answer
+from assay.nlq.plan import Query, Refusal
 from assay.nlq.planner import Planner, PlanResult
-from assay.nlq.plan import Refusal
 
 MAX_CACHE = 512
 RATE_PER_HOUR = 20
@@ -66,8 +68,10 @@ class AskService:
     """Planner plus the guards that make it safe to expose."""
 
     def __init__(self, contracts: ContractSet, token: str = "",
-                 planner: Optional[Planner] = None) -> None:
+                 planner: Optional[Planner] = None,
+                 executor: Optional[Callable[[Query], Answer]] = None) -> None:
         self._planner = planner or Planner(contracts, token=token)
+        self._executor = executor
         self._cache: OrderedDict[str, dict[str, Any]] = OrderedDict()
         self._limiter = RateLimiter()
         self._budget = Budget()
@@ -80,7 +84,10 @@ class AskService:
         with self._lock:
             if key in self._cache:
                 self._cache.move_to_end(key)
-                return {**self._cache[key], "cached": True}
+                cached = self._cache[key]
+        if key in self._cache:
+            return self._answered({**cached, "cached": True})
+        with self._lock:
             if not self._limiter.allow(caller, now):
                 return _refused("NLQ-04", "too many questions from here in the last hour",
                                 "The demo limits each visitor to 20 questions an hour.")
@@ -92,7 +99,19 @@ class AskService:
             self._cache[key] = rendered
             while len(self._cache) > MAX_CACHE:
                 self._cache.popitem(last=False)
-        return {**rendered, "cached": False}
+        return self._answered({**rendered, "cached": False})
+
+    def _answered(self, rendered: dict[str, Any]) -> dict[str, Any]:
+        """Only the plan is cached; the number is computed every time.
+
+        The plan is what costs money. The query costs milliseconds, and a
+        cached figure would keep showing last night's answer after a
+        restatement — which is the exact failure this project reports.
+        """
+        if self._executor is None or not rendered.get("answerable"):
+            return rendered
+        answer = self._executor(Query.model_validate(rendered["plan"]))
+        return {**rendered, **_render_answer(answer)}
 
     @property
     def stats(self) -> dict[str, Any]:
@@ -109,6 +128,33 @@ def _render(result: PlanResult) -> dict[str, Any]:
         "latency_s": round(result.latency_s, 3),
         "attempts": result.attempts,
     }
+
+
+def _render_answer(answer: Answer) -> dict[str, Any]:
+    if answer.refusals:
+        return {"answerable": False, "answer": None, "checks": [],
+                "refusals": [_refusal(r) for r in answer.refusals]}
+    result = answer.results[0]
+    return {
+        "answer": {
+            "metric": result.metric,
+            "dimension": result.dimension,
+            "value": result.value,
+            "rows": [{"label": k, "value": v} for k, v in result.rows],
+            "window": {"start": str(answer.window.start) if answer.window.start else None,
+                       "end": str(answer.window.end) if answer.window.end else None},
+            "trustworthy": answer.trustworthy,
+            "sql": result.sql,
+            "scans": answer.scans,
+            "duration_s": round(answer.duration_s, 3),
+        },
+        "checks": [_check(c) for c in answer.checks],
+    }
+
+
+def _check(c: CheckResult) -> dict[str, Any]:
+    return {"rule": c.invariant_id, "subject": c.subject,
+            "status": c.status.value, "detail": c.detail}
 
 
 def _refusal(r: Refusal) -> dict[str, Any]:

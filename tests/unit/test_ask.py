@@ -97,3 +97,60 @@ def test_a_refusal_is_rendered_with_its_repair(contracts):
     refusal = service.ask("what is nope")["refusals"][0]
     assert refusal["rule"] == "STR-01"
     assert refusal["concept"] == "nope"
+
+
+class _Answerer:
+    """Records how often a plan was executed."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def __call__(self, plan):
+        from assay.engine.sql import Window
+        from assay.invariants.base import CheckResult, Status
+        from assay.nlq.answer import Answer, Result
+
+        self.calls += 1
+        return Answer(
+            plan=plan,
+            window=Window(),
+            results=(Result("net_revenue", None, 42.0, (), "SELECT 1"),),
+            checks=(CheckResult("TMP-01", "net_revenue", Status.PASS, "fresh"),),
+            scans=1,
+        )
+
+
+def test_an_answered_question_carries_its_value_and_checks(contracts):
+    executor = _Answerer()
+    service = AskService(contracts, planner=Planner(contracts, transport=Transport()),
+                         executor=executor)
+    body = service.ask("net revenue")
+    assert body["answer"]["value"] == 42.0
+    assert body["checks"][0]["rule"] == "TMP-01"
+    assert body["answer"]["trustworthy"] is True
+
+
+def test_a_cached_question_is_still_executed_fresh(contracts):
+    """The plan is cached; the number is not.
+
+    A cached figure would keep showing last night's answer after a restatement,
+    which is the exact failure this project exists to report.
+    """
+    transport, executor = Transport(), _Answerer()
+    service = AskService(contracts, planner=Planner(contracts, transport=transport),
+                         executor=executor)
+    service.ask("net revenue")
+    again = service.ask("net revenue")
+    assert again["cached"] is True
+    assert transport.calls == 1   # the model was paid for once
+    assert executor.calls == 2    # the warehouse was asked twice
+
+
+def test_a_refused_question_is_never_executed(contracts):
+    executor = _Answerer()
+    service = AskService(contracts,
+                         planner=Planner(contracts, transport=Transport(
+                             '{"answerable": false, "refusal_reason": "no"}')),
+                         executor=executor)
+    assert service.ask("what is churn")["answerable"] is False
+    assert executor.calls == 0
