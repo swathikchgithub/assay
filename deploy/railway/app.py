@@ -21,7 +21,7 @@ from typing import Any
 import duckdb
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import FastAPI
+from fastapi import FastAPI, Query as Q, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from assay.contracts.sources import YamlSource
@@ -30,6 +30,7 @@ from assay.engine.sql import Window
 from assay.invariants.base import Status
 from assay.run.history import History
 from assay.run.runner import run
+from deploy.railway.ask import AskService, token_from_env
 from demo import data, seed
 
 DATA_DIR = Path(os.environ.get("ASSAY_DATA_DIR", "/data"))
@@ -44,6 +45,14 @@ _lock = threading.Lock()
 
 _ready = threading.Event()
 _error: dict[str, str] = {}
+_ask: dict[str, AskService] = {}
+
+
+def _ask_service() -> AskService:
+    """Built once, lazily — the planner renders a catalogue from the contracts."""
+    if "svc" not in _ask:
+        _ask["svc"] = AskService(YamlSource(CONTRACTS).load(), token=token_from_env())
+    return _ask["svc"]
 
 
 def _clock() -> datetime:
@@ -185,7 +194,8 @@ def root() -> dict[str, Any]:
         "what": "Runs Assay nightly against a synthetic warehouse that restates "
                 "a closed month each cycle. Read-only; holds no credential.",
         "ready": _ready.is_set(),
-        "endpoints": ["/health", "/api/latest", "/api/runs", "/api/restatements", "/docs"],
+        "endpoints": ["/health", "/api/ask?q=...", "/api/latest", "/api/runs",
+                      "/api/restatements", "/docs"],
         "source": "https://github.com/swathikchgithub/assay",
     }
 
@@ -236,6 +246,27 @@ def runs(limit: int = 30) -> dict[str, Any]:
             for r, t, f, w, p in rows
         ]
     }
+
+
+@app.get("/api/ask")
+def ask(request: Request, q: str = Q(..., max_length=400)) -> dict[str, Any]:
+    """A question becomes a typed plan, or a refusal with a reason.
+
+    The model resolves intent; the gate decides whether the result may run. It
+    does not execute anything yet — that is the next step.
+    """
+    if not token_from_env():
+        return {"answerable": False, "plan": None, "cached": False, "latency_s": 0.0,
+                "refusals": [{"rule": "NLQ-03", "reason": "the planner is not configured",
+                              "repair": "HF_TOKEN is unset on this deployment.",
+                              "concept": None}]}
+    caller = request.headers.get("x-forwarded-for", "anon").split(",")[0].strip()
+    return _ask_service().ask(q, caller=caller)
+
+
+@app.get("/api/ask/stats")
+def ask_stats() -> dict[str, Any]:
+    return _ask_service().stats if token_from_env() else {"configured": False}
 
 
 @app.get("/api/restatements")

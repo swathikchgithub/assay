@@ -303,9 +303,9 @@ stronger anyway:
 |---|---|---|
 | 0 | ~~Spike: questions × candidate models~~ **done** | Qwen2.5-72B, and that the gate catches model errors |
 | 1 | ~~Plan IR + type gate + unit tests~~ **done** | STR-01/02/03/05/08, 37 tests, no warehouse and no model |
-| 2 | HF planner behind the gate | End-to-end on Railway |
+| 2 | ~~HF planner behind the gate~~ **done** | End-to-end on Railway; guards pulled forward from step 4 |
 | 3 | Proof card rendering + question box on Vercel | The visible product |
-| 4 | Cache, rate limit, budget cap | Safe to make public |
+| 4 | ~~Cache, rate limit, budget cap~~ **done in step 2** | A public endpoint calling a paid model cannot ship without them |
 
 Step 1 is the substantial one and it is fully testable without an LLM, which
 is the right shape: the deterministic half is provable, the probabilistic half

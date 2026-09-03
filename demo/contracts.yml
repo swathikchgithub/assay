@@ -6,6 +6,7 @@ version: demo-v1
 
 metrics:
   - name: net_revenue
+    synonyms: [revenue, net sales, net]
     table: orders
     measure: sum(amount - discount)
     time_column: ordered_at
@@ -32,6 +33,7 @@ metrics:
       - {name: sku, column: sku, table: order_items, synonyms: [product]}
 
   - name: gross_revenue
+    synonyms: [gross, gross sales, top line]
     table: orders
     measure: sum(amount)
     time_column: ordered_at
@@ -40,6 +42,7 @@ metrics:
     owner: finance
 
   - name: completed_revenue
+    synonyms: [completed sales, fulfilled revenue]
     table: orders
     measure: sum(amount)
     time_column: ordered_at
@@ -49,6 +52,7 @@ metrics:
     owner: finance
 
   - name: discount_total
+    synonyms: [discounts, total discounts, markdowns]
     table: discounts
     measure: sum(amount)
     time_column: applied_at
@@ -57,6 +61,7 @@ metrics:
     owner: revops
 
   - name: active_users
+    synonyms: [users, MAU, DAU, active user count, monthly active users, daily active users]
     table: events
     measure: count(distinct user_id)
     time_column: occurred_at
@@ -65,6 +70,7 @@ metrics:
     owner: product
 
   - name: open_tickets
+    synonyms: [tickets, support tickets, open cases]
     table: tickets
     measure: count(*)
     time_column: opened_at

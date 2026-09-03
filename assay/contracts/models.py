@@ -117,6 +117,7 @@ class Metric(BaseModel):
     tolerance: float = Field(default=0.001, ge=0.0, description="relative")
     freshness_sla_hours: Optional[int] = Field(default=None, gt=0)
     derived: Optional[str] = None  # expression over other metrics -> IDN-02
+    synonyms: tuple[str, ...] = ()  # what people actually call this
     owner: Optional[str] = None
 
     @field_validator("name", "table", "time_column")
