@@ -91,10 +91,17 @@ P0 exists to falsify one hypothesis as cheaply as possible:
 **Achieved.** Eleven generated checks find all seven planted defects, on both
 DuckDB and a live Snowflake account, byte-identically, under a read-only role.
 
-**Not yet achieved.** Every defect so far was planted by us. The open question
-— the one that decides whether the product exists — is whether these checks
-find anything a team *cares about* in their own numbers. That needs
-`--dbt-manifest` pointed at a real project. See [roadmap](09-roadmap.md).
+**Partly achieved since.** Run against `SNOWFLAKE_SAMPLE_DATA.TPCH_SF1` — 7.65M
+rows nobody here authored — it produced **zero false positives** across 22
+passing checks and correctly reported the one real defect in that schema, a
+4.00x fan-out through `LINEITEM`. That answers G3's precondition: the report is
+not noise.
+
+**Still not achieved.** TPCH is real-shaped but it is not a team's own numbers,
+and nobody at that team is on the hook for them. Whether a working team *cares*
+about what this reports remains untested, and it is the question that decides
+whether the product exists. It needs a real dbt project. See
+[roadmap](09-roadmap.md).
 
 ## What would falsify the premise
 

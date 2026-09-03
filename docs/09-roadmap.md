@@ -6,9 +6,14 @@
 on DuckDB and on a live Snowflake account, byte-identically, under a read-only
 role. Setup failures diagnose themselves. 159 tests.
 
-**Not done, and it is the only thing that matters.** Every defect found so far
-was planted by us. The open question is whether these checks find anything a
-team *cares about* in their own numbers.
+**Since verified on data nobody planted.** Against `TPCH_SF1` (7.65M rows):
+zero false positives across 22 passing checks, the one real defect in that
+schema correctly reported, and one bug found in Assay itself — a `DATE` time
+column crashed freshness, because every demo table uses `TIMESTAMP`.
+
+**Still not done, and it is the only thing that matters.** TPCH is real-shaped
+but it is not a team's own numbers. Whether a working team *cares* about what
+these checks report remains untested.
 
 That needs `--dbt-manifest` against a real project. The first thing expected to
 break is additivity inference: dbt does not record it, so it is inferred from

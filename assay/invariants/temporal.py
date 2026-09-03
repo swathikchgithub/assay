@@ -9,7 +9,7 @@ service possible, and on its own it is the most surprising thing P0 reports.
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, Union
 
 from assay.contracts.models import Grain, Metric
 from assay.engine.sql import MetricSQL
@@ -220,5 +220,14 @@ def _first_full_period(start: Optional[date]) -> str:
     return following.strftime("%Y-%m")
 
 
-def _as_utc(value: datetime) -> datetime:
-    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+def _as_utc(value: Union[datetime, date]) -> datetime:
+    """Normalise whatever the warehouse returned for a time column.
+
+    A DATE column comes back as `datetime.date`, which has no `tzinfo` at all.
+    Every table in the demo uses TIMESTAMP, so this only showed up the first
+    time Assay ran against a real warehouse - TPCH's `o_orderdate` is a DATE,
+    and freshness crashed rather than reporting.
+    """
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return datetime(value.year, value.month, value.day, tzinfo=timezone.utc)

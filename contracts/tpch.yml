@@ -1,0 +1,59 @@
+# TPCH_SF1 — Snowflake's sample dataset.
+#
+# Not written by us and not seeded with defects, which is the point: the demo
+# proves Assay finds planted problems, and this asks the harder question of
+# whether it stays quiet on data that is basically fine.
+#
+# One genuine defect is expected. ORDERS -> LINEITEM is one-to-many in the TPCH
+# schema, so any additive measure sliced through that path is overstated. It is
+# declared here exactly as a real project would declare it, and CON-04 should
+# say so.
+
+version: tpch-sf1
+
+metrics:
+  - name: order_total
+    table: orders
+    measure: sum(o_totalprice)
+    time_column: o_orderdate
+    additivity: additive
+    unit: money
+    tolerance: 0.001
+    freshness_sla_hours: 24        # TPCH stops in 1998; TMP-01 should warn
+    owner: sample-data
+    joins:
+      - {table: customer, left_key: o_custkey,  right_key: c_custkey,  kind: left}
+      - {table: lineitem, left_key: o_orderkey, right_key: l_orderkey, kind: left}
+    dimensions:
+      - {name: status,         column: o_orderstatus}
+      - {name: market_segment, column: c_mktsegment, table: customer}
+      - {name: ship_mode,      column: l_shipmode,   table: lineitem}
+
+  - name: order_count
+    table: orders
+    measure: count(*)
+    time_column: o_orderdate
+    additivity: additive
+    unit: count
+    owner: sample-data
+
+  - name: line_revenue
+    table: lineitem
+    measure: sum(l_extendedprice * (1 - l_discount))
+    time_column: l_shipdate
+    additivity: additive
+    unit: money
+    owner: sample-data
+    dimensions:
+      - {name: return_flag, column: l_returnflag}
+      - {name: ship_mode,   column: l_shipmode}
+
+  # Declared honestly, unlike the demo's active_users. IDN-03 must NOT be
+  # generated for it, and CON-01 must not be either.
+  - name: distinct_customers
+    table: orders
+    measure: count(distinct o_custkey)
+    time_column: o_orderdate
+    additivity: non_additive
+    unit: count
+    owner: sample-data

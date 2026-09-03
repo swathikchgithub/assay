@@ -17,6 +17,35 @@ phase exists to answer one question, cheaply and falsifiably:
 If a team is indifferent to what this reports, the premise of everything
 later in the spec is wrong, and three weeks of work said so.
 
+## Run against data nobody planted
+
+The demo proves Assay finds defects that were put there on purpose. The harder
+question is whether it stays quiet on data that is basically fine, so it was
+run against `SNOWFLAKE_SAMPLE_DATA.TPCH_SF1` — 7.65M rows, not authored here,
+nothing seeded.
+
+```
+1998-08-03 · 2 failed, 0 warned, 22 passed, 4 skipped · 17 scans · 7.9s
+
+✖ CON-04  order_total -> lineitem — fan-out: 337,289 rows into 1,348,711 (4.00x)
+✖ CON-01  order_total by ship_mode — the traversal to lineitem inflates it by 400.00%
+```
+
+**Zero false positives.** Every `CON-02` returned exactly 0.00% unattributed,
+`CON-01` passed on the paths that are genuinely many-to-one, and `IDN-03`
+passed for all three additive metrics. The generation guards held: a metric
+declared `non_additive` produced neither a decomposition nor a cross-grain
+check, which is what should happen.
+
+The two failures are both true. `ORDERS → LINEITEM` really is one-to-many in
+TPCH, and `4.00x` is exactly SF1's shape — 1.5M orders against 6M line items.
+
+It also found a bug in Assay. Every table in the demo uses `TIMESTAMP`, so a
+`DATE` time column had never been exercised; TPCH's `o_orderdate` is one, and
+freshness crashed rather than reporting. Fixed, with a regression test. That is
+the ordinary result of pointing a tool at real data for the first time, and the
+reason to do it early.
+
 ## Documentation
 
 Full docs in [`docs/`](docs/):

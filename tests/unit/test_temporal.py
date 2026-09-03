@@ -141,3 +141,29 @@ def test_discontinuity_notes_an_unusual_step():
     )
     assert result.status is Status.WARN or result.status is Status.PASS
     assert result.observed is not None
+
+
+def test_freshness_accepts_a_date_column():
+    """A DATE column returns `datetime.date`, which has no tzinfo.
+
+    Every demo table uses TIMESTAMP, so this only surfaced the first time Assay
+    ran against a real warehouse — TPCH's `o_orderdate` is a DATE and the check
+    crashed instead of reporting.
+    """
+    from datetime import date as _date
+
+    metric = _metric(freshness_sla_hours=24)
+    adapter = FakeAdapter({"max(": [(_date(2026, 8, 30),)]})
+    result = Freshness(metric, MetricSQL(metric, DuckDBDialect())).run(_ctx(adapter))
+    assert result.status is Status.WARN
+    assert result.observed == 57.0  # midnight on the 30th to 09:00 on 1 Sept
+
+
+def test_freshness_treats_a_date_as_midnight_utc():
+    from datetime import date as _date
+
+    metric = _metric(freshness_sla_hours=72)
+    adapter = FakeAdapter({"max(": [(_date(2026, 9, 1),)]})
+    result = Freshness(metric, MetricSQL(metric, DuckDBDialect())).run(_ctx(adapter))
+    assert result.status is Status.PASS
+    assert result.observed == 9.0
