@@ -6,7 +6,7 @@ COPY assay ./assay
 COPY demo ./demo
 COPY deploy ./deploy
 
-RUN pip install --no-cache-dir . fastapi uvicorn[standard] apscheduler
+RUN pip install --no-cache-dir ".[nlq,service]"
 
 ENV ASSAY_DATA_DIR=/data PYTHONUNBUFFERED=1
 EXPOSE 8000

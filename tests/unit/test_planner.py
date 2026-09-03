@@ -187,3 +187,16 @@ def test_generation_is_deterministic(contracts):
     t = Transport(_reply(select=["net_revenue"]))
     Planner(contracts, transport=t).plan("x")
     assert t.requests[0]["temperature"] == 0
+
+
+def test_the_default_transport_can_actually_be_constructed(contracts):
+    """The real transport imports httpx lazily inside the request.
+
+    Every other test injects a fake, so nothing exercised that import — and a
+    deployment without httpx failed at request time rather than at build time.
+    Declaring the dependency is the fix; this pins that it stays importable.
+    """
+    import httpx  # noqa: F401
+
+    planner = Planner(contracts, token="x")
+    assert planner._transport == planner._http

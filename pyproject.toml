@@ -8,6 +8,8 @@ dependencies = ["duckdb>=1.0", "pydantic>=2.7", "pyyaml>=6.0"]
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
 snowflake = ["snowflake-connector-python>=3.12"]
+nlq = ["httpx>=0.27"]          # assay.nlq.planner talks to an inference API
+service = ["fastapi>=0.115", "uvicorn[standard]>=0.30", "apscheduler>=3.10", "httpx>=0.27"]
 
 [project.scripts]
 assay = "assay.run.cli:main"
