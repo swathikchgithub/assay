@@ -19,9 +19,17 @@ metrics:
       - {table: accounts,    left_key: account_id,  right_key: id,       kind: left}
       - {table: order_items, left_key: id,          right_key: order_id, kind: left}
     dimensions:
-      - {name: region,  column: name,    table: regions}
-      - {name: segment, column: segment, table: accounts}
-      - {name: sku,     column: sku,     table: order_items}
+      - name: region
+        column: name
+        table: regions
+        domain: [Europe, North America, Asia Pacific]
+        synonyms: [geo, territory]
+      - name: segment
+        column: segment
+        table: accounts
+        domain: [Enterprise, Mid-Market, SMB]
+        synonyms: [tier, customer segment]
+      - {name: sku, column: sku, table: order_items, synonyms: [product]}
 
   - name: gross_revenue
     table: orders

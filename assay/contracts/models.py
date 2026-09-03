@@ -76,11 +76,22 @@ class Join(BaseModel):
 
 
 class Dimension(BaseModel):
+    """A way to slice a metric.
+
+    `domain` is optional and enables STR-05: a plan filtering on a value the
+    dimension cannot hold is rejected before the warehouse is touched, with the
+    nearest legal value offered. Undeclared means the rule is skipped rather
+    than guessed at - `region = 'Northeast'` against a column holding `'NE'`
+    returns zero rows silently, and only a declared domain can catch that.
+    """
+
     model_config = ConfigDict(frozen=True)
 
     name: str
     column: str
     table: Optional[str] = None  # None -> the metric's base table
+    domain: Optional[tuple[str, ...]] = None
+    synonyms: tuple[str, ...] = ()
 
     @field_validator("name", "column", "table")
     @classmethod

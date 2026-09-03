@@ -1,7 +1,8 @@
 # 11 · NLQ planner — build plan
 
-**Status: step 0 complete, steps 1-4 not built.** The model is chosen on
-evidence (below). Nothing else exists yet.
+**Status: steps 0 and 1 complete. Steps 2-4 not built.** The model is chosen
+on evidence, and the plan IR and type gate exist with 37 tests. No model is
+wired in yet.
 
 ## What is being built
 
@@ -301,7 +302,7 @@ stronger anyway:
 | | Step | Verifies |
 |---|---|---|
 | 0 | ~~Spike: questions × candidate models~~ **done** | Qwen2.5-72B, and that the gate catches model errors |
-| 1 | Plan IR + type gate + unit tests, no model | The gate refuses correctly — testable offline |
+| 1 | ~~Plan IR + type gate + unit tests~~ **done** | STR-01/02/03/05/08, 37 tests, no warehouse and no model |
 | 2 | HF planner behind the gate | End-to-end on Railway |
 | 3 | Proof card rendering + question box on Vercel | The visible product |
 | 4 | Cache, rate limit, budget cap | Safe to make public |
