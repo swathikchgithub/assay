@@ -17,6 +17,32 @@ phase exists to answer one question, cheaply and falsifiably:
 If a team is indifferent to what this reports, the premise of everything
 later in the spec is wrong, and three weeks of work said so.
 
+## Ask it something
+
+The showcase takes a question. A model turns it into a **typed plan** — never
+SQL — the plan is checked against the metric definitions before anything runs,
+and the answer comes back with the checks that bear on it.
+
+```
+net_revenue by region                                    16,203,631.96
+    North America   9,382,776.59
+    Europe          4,829,717.92
+    Asia Pacific    1,991,137.45
+
+  ✖ CON-01  grouping by region accounts for 16,203,631.96 of 17,539,036.25 —
+            1,335,404.29 (7.61%) disappears in the traversal to regions
+  ✓ CON-02  0.00% of net_revenue has no region
+  ✓ CON-04  traversal to regions is many-to-one
+  ⚠ TMP-01  newest row is 49.0h old against a 48h SLA
+
+  plan  {"select":["net_revenue"],"by":["region"],"where":[]}
+```
+
+Ask for something with no legal answer and it declines rather than inventing
+one — every refusal is logged as a coverage gap. The model resolves intent; a
+deterministic gate decides whether the result may run, and the gate wins when
+they disagree. See [the build plan](docs/11-nlq-planner.md).
+
 ## Run against data nobody planted
 
 The demo proves Assay finds defects that were put there on purpose. The harder

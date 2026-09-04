@@ -83,6 +83,36 @@
   .callout{background:var(--accent-soft);border-left:3px solid var(--accent);padding:18px 22px;border-radius:0 3px 3px 0;margin:24px 0}
   .callout p{margin:0;max-width:60ch}
 
+  .ask{display:flex;gap:10px;margin:0 0 14px;flex-wrap:wrap}
+  .ask input{flex:1 1 320px;font-family:var(--f-body);font-size:16px;padding:12px 14px;
+    border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink)}
+  .ask input:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .ask button{font-family:var(--f-display);font-weight:600;font-size:15px;padding:12px 22px;
+    border:1px solid var(--accent);border-radius:4px;background:var(--accent);color:var(--surface);cursor:pointer}
+  .ask button:disabled{opacity:.55;cursor:progress}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:26px}
+  .chip{font-family:var(--f-mono);font-size:12px;padding:6px 11px;border:1px solid var(--rule);
+    border-radius:20px;background:var(--surface);color:var(--ink-soft);cursor:pointer}
+  .chip:hover{border-color:var(--accent);color:var(--accent)}
+  .card-out{background:var(--surface);border:1px solid var(--rule);border-radius:4px;padding:22px 24px;min-height:70px}
+  .card-out.bad{border-color:var(--fail)}
+  .cardhead{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;
+    border-bottom:1px solid var(--rule-soft);padding-bottom:12px;margin-bottom:12px}
+  .cardhead .what{font-family:var(--f-mono);font-size:12.5px;color:var(--ink-soft)}
+  .cardhead .figure{font-family:var(--f-mono);font-size:clamp(20px,3vw,28px);font-weight:600;
+    font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .breakdown{list-style:none;padding:0;margin:0 0 14px;max-width:none}
+  .breakdown li{display:flex;justify-content:space-between;gap:16px;font-family:var(--f-mono);
+    font-size:12.5px;padding:3px 0;color:var(--ink-soft);font-variant-numeric:tabular-nums;margin:0}
+  .checks{list-style:none;padding:0;margin:0;max-width:none}
+  .checks li{display:grid;grid-template-columns:16px 62px 1fr;gap:8px;font-size:13.5px;
+    padding:4px 0;line-height:1.45;margin:0}
+  .checks code{background:none;padding:0;color:var(--ink-faint);font-size:11.5px}
+  .meta{font-family:var(--f-display);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--ink-faint);margin-top:14px}
+  .plan{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-faint);margin-top:10px;
+    overflow-x:auto;white-space:pre}
+
   footer{padding:46px 0 70px;color:var(--ink-faint);font-size:14px}
   footer a{color:var(--ink-soft)}
 
@@ -123,6 +153,25 @@
     </p>
   </div>
 </header>
+
+<section>
+  <div class="wrap">
+    <h2>Ask it something</h2>
+    <p class="sub">A model turns your question into a <em>typed plan</em> — never SQL. The plan
+      is checked against the metric definitions before anything runs, and the answer comes back
+      with the checks that bear on it. Live, against the demo warehouse.</p>
+
+    <form class="ask" id="askform">
+      <input id="q" type="text" maxlength="240" autocomplete="off"
+             placeholder="net revenue by region" aria-label="Ask a question about the demo warehouse">
+      <button type="submit" id="go">Ask</button>
+    </form>
+    <div class="chips" id="chips"></div>
+    <div class="card-out" id="out"><span style="color:var(--ink-faint)">Pick a question above, or type your own.</span></div>
+    <p class="sub" style="margin-top:22px">Two of the suggestions have no legal answer. Watch what
+      it does with those — declining is the behaviour the rest of the system is built around.</p>
+  </div>
+</section>
 
 <section>
   <div class="wrap">
@@ -225,13 +274,95 @@ uv pip install --python .venv/bin/python -e ".[dev]"
 <footer>
   <div class="wrap">
     <p style="max-width:60ch;margin:0">
-      Assay is phase P0: an invariant engine over metric definitions a team
-      already has. No language model, no query interface, no dashboard —
-      those are later phases, deliberately.
+      The model resolves intent into a typed plan. It never writes SQL, never
+      reaches the warehouse, and never decides whether an answer is correct —
+      a deterministic gate does that, and it wins when the two disagree.
     </p>
     <p style="margin:16px 0 0"><a href="https://github.com/swathikchgithub/assay">Source and documentation on GitHub</a> · <a href="https://assay-demo-production-7f13.up.railway.app/api/latest">see a live run</a> · MIT</p>
   </div>
 </footer>
 
+<script>
+  const API = "https://assay-demo-production-7f13.up.railway.app/api/ask";
+  const SUGGESTIONS = [
+    "net revenue by region",
+    "net revenue by sku",
+    "net revenue for the enterprise segment",
+    "how many active users",
+    "what is our churn rate",
+    "active users by region",
+  ];
+  const MARK = { pass: ["\u2713", "var(--pass)"], warn: ["\u26a0", "var(--warn)"], fail: ["\u2716", "var(--fail)"] };
+  const out = document.getElementById("out");
+  const input = document.getElementById("q");
+  const button = document.getElementById("go");
+
+  const money = n => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  SUGGESTIONS.forEach(text => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip";
+    chip.textContent = text;
+    chip.addEventListener("click", () => { input.value = text; ask(text); });
+    document.getElementById("chips").appendChild(chip);
+  });
+
+  document.getElementById("askform").addEventListener("submit", e => {
+    e.preventDefault();
+    if (input.value.trim()) ask(input.value.trim());
+  });
+
+  async function ask(question) {
+    button.disabled = true;
+    out.className = "card-out";
+    out.innerHTML = '<span style="color:var(--ink-faint)">Planning\u2026 the model takes a second or two.</span>';
+    try {
+      const res = await fetch(API + "?q=" + encodeURIComponent(question));
+      render(await res.json());
+    } catch (err) {
+      out.className = "card-out bad";
+      out.innerHTML = '<strong>The demo is unreachable.</strong><br>' +
+        '<span style="color:var(--ink-soft)">' + esc(err.message) + "</span>";
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  function render(d) {
+    if (!d.answerable) return renderRefusal(d);
+    const a = d.answer;
+    out.className = "card-out" + (a.trustworthy ? "" : " bad");
+    const rows = (a.rows || []).map(r =>
+      "<li><span>" + esc(r.label === null ? "(no value)" : r.label) + "</span><span>" + money(r.value) + "</span></li>").join("");
+    const checks = (d.checks || []).map(c => {
+      const [glyph, colour] = MARK[c.status] || ["\u2013", "var(--ink-faint)"];
+      return '<li><span style="color:' + colour + '">' + glyph + "</span><code>" + esc(c.rule) +
+        "</code><span>" + esc(c.detail) + "</span></li>";
+    }).join("");
+    out.innerHTML =
+      '<div class="cardhead"><span class="what">' + esc(a.metric) +
+        (a.dimension ? " by " + esc(a.dimension) : "") + '</span>' +
+        '<span class="figure">' + (a.value === null ? "\u2014" : money(a.value)) + "</span></div>" +
+      (rows ? '<ul class="breakdown">' + rows + "</ul>" : "") +
+      '<ul class="checks">' + checks + "</ul>" +
+      '<div class="plan">plan  ' + esc(JSON.stringify({ select: d.plan.select, by: d.plan.by, where: d.plan.where })) + "</div>" +
+      '<p class="meta">' + (a.trustworthy ? "no blocking check failed" : "a blocking check failed") +
+        " \u00b7 " + a.scans + " scans \u00b7 model " + d.latency_s + "s" +
+        (d.cached ? " (plan cached)" : "") + "</p>";
+  }
+
+  function renderRefusal(d) {
+    const r = (d.refusals || [])[0] || { rule: "?", reason: "no answer" };
+    out.className = "card-out bad";
+    out.innerHTML =
+      '<div class="cardhead"><span class="what">declined</span>' +
+        '<span class="figure" style="color:var(--fail);font-size:20px">' + esc(r.rule) + "</span></div>" +
+      "<p style=\"margin:0 0 6px\"><strong>" + esc(r.reason) + "</strong></p>" +
+      (r.repair ? '<p style="margin:0;color:var(--ink-soft);font-size:15px">' + esc(r.repair) + "</p>" : "") +
+      '<p class="meta">refusing is a feature \u00b7 every one is logged as a coverage gap</p>';
+  }
+</script>
 </body>
 </html>
